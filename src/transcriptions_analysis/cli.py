@@ -39,9 +39,9 @@ from transcriptions_analysis.artifacts import (
 from transcriptions_analysis.content_language import parse_iso_codes_csv
 from transcriptions_analysis.ingest import (
     DEFAULT_CSV_BATCH_ROWS,
-    EXPECTED_COLUMNS,
     count_csv_logical_rows_first_column,
     file_fingerprint,
+    missing_required_columns,
     read_csv_batches,
 )
 from transcriptions_analysis.logging_utils import configure_logging, log_kv
@@ -207,6 +207,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     dropped_ts = 0
     created_min_ts: datetime | None = None
     created_max_ts: datetime | None = None
+    user_stratify_requested = not getattr(args, "no_user_stratify", False)
+    user_stratify_available: bool | None = None
 
     t_run0 = time.perf_counter()
     batch_idx = 0
@@ -236,10 +238,21 @@ def cmd_run(args: argparse.Namespace) -> int:
         max_rows=args.max_rows,
     ):
         t_batch0 = time.perf_counter()
-        missing = [c for c in EXPECTED_COLUMNS if c not in batch.columns]
+        missing = missing_required_columns(batch.columns)
         if missing:
-            msg = f"CSV missing expected columns: {missing}"
+            msg = f"CSV missing required columns: {missing}"
             raise ValueError(msg)
+        if user_stratify_available is None:
+            user_stratify_available = "telegram_user_internal_id" in batch.columns
+            if user_stratify_requested and not user_stratify_available:
+                logging.getLogger("ta").warning(
+                    "user_time_agg_month skipped: input is missing telegram_user_internal_id"
+                )
+                if show_progress:
+                    emit_phase_line(
+                        "aggregate_phase: skip user_time_agg_month "
+                        "(missing telegram_user_internal_id)."
+                    )
 
         enriched = _build_feature_frame(
             batch,
@@ -373,7 +386,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         ext_sh.write_csv(run_dir / "file_extension_share_time_agg_month.csv")
 
-    if not getattr(args, "no_user_stratify", False):
+    if user_stratify_requested and user_stratify_available:
         user_m = aggregate_user_month(df_b, metric_cols=metrics_cols)
         user_m.write_parquet(run_dir / "user_time_agg_month.parquet", compression="zstd")
         user_m.write_csv(run_dir / "user_time_agg_month.csv")

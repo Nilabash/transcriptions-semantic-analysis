@@ -17,6 +17,11 @@ EXPECTED_COLUMNS = (
     "transcription_text",
 )
 
+REQUIRED_COLUMNS = (
+    "created_at",
+    "transcription_text",
+)
+
 # Default Polars ``collect_batches(chunk_size=…)`` for wide CSV rows (large transcription_text).
 # Smaller chunks lower peak RAM during read_phase + Layer A/B; raises part file count slightly.
 DEFAULT_CSV_BATCH_ROWS = 4_096
@@ -39,6 +44,11 @@ def _schema_overrides() -> dict[str, pl.DataType]:
     }
 
 
+def missing_required_columns(columns: list[str] | tuple[str, ...]) -> list[str]:
+    """Return core contract columns that must exist for the pipeline to run."""
+    return [c for c in REQUIRED_COLUMNS if c not in columns]
+
+
 def count_csv_logical_rows_first_column(
     path: str | Path,
     batch_size: int = DEFAULT_CSV_BATCH_ROWS,
@@ -46,9 +56,9 @@ def count_csv_logical_rows_first_column(
     """
     Count logical CSV rows once by streaming **column index 0** only.
 
-    The project contract assumes ``id`` is the first physical column so we skip
-    parsing mega multiline ``transcription_text`` fields — much cheaper than two
-    full wide reads while still respecting quoted multiline fields.
+    Stream whichever column is physically first so we skip parsing mega multiline
+    ``transcription_text`` fields — much cheaper than two full wide reads while
+    still respecting quoted multiline fields.
     """
     path = Path(path)
     if not path.is_file():

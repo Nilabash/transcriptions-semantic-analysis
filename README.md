@@ -26,16 +26,16 @@ The project reads a historical transcription export, extracts structural and tex
 
 The batch pipeline expects a CSV file, not an `.xlsx` file.
 
-If the source is managed in Excel, export it to CSV first and keep these exact column names:
+If the source is managed in Excel, export it to CSV first and keep these exact column names when you use the related features:
 
 | Column | Required | Notes |
 |------|------|------|
-| `id` | Yes | Row identifier |
-| `telegram_user_internal_id` | Yes | Internal user key |
-| `telegram_user_id` | Yes | Telegram user id |
-| `created_at` | Yes | Format: `YYYY-MM-DD HH:MM:SS` |
-| `file_name` | Yes | Source file name or path-like reference |
-| `transcription_text` | Yes | Full diarized transcript, may span many CSV lines |
+| `created_at` | Core | Format: `YYYY-MM-DD HH:MM:SS`; required for time aggregation |
+| `transcription_text` | Core | Full diarized transcript, may span many CSV lines |
+| `telegram_user_internal_id` | Optional | Enables `user_time_agg_month.*`; if absent, user stratification is skipped |
+| `file_name` | Optional | Enables file-name-derived metadata such as extension and basename token count |
+| `id` | Optional | Preserved when present; useful as a source row identifier |
+| `telegram_user_id` | Optional | Preserved when present; not required by current pipeline logic |
 
 More detail: [docs/data-contract.md](docs/data-contract.md)
 
@@ -81,7 +81,7 @@ Each run creates `outputs/<run_id>/` with:
 - `language_share_time_agg_*` when Layer B is enabled
 - `content_category_share_time_agg_*` when Layer B is enabled
 - `file_extension_share_time_agg_month.*` when Layer B is enabled
-- `user_time_agg_month.*` unless disabled
+- `user_time_agg_month.*` unless disabled or the input omits `telegram_user_internal_id`
 - `figures/**/*.png`
 - `report.html` built-in HTML report, currently Russian-language
 - `manifest.json`

@@ -63,7 +63,7 @@ The pipeline produces:
 - per-row batch parts
 - numeric time aggregates
 - categorical share tables
-- optional per-user monthly aggregates
+- optional per-user monthly aggregates when `telegram_user_internal_id` is present
 - reproducibility metadata
 - human-readable charts and HTML
 

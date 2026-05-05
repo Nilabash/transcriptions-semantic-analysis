@@ -13,20 +13,33 @@ It does not read `.xlsx` directly.
 
 If your source is in Excel, export it to CSV before running `ta-batch`.
 
-## Required Columns
+## Core Required Columns
 
-The CSV must contain these exact headers:
+The CSV must contain these exact headers to run the main batch pipeline:
 
 | Column | Required | Type in pipeline | Meaning |
 |------|------|------|------|
-| `id` | Yes | string | Row or transcription id |
-| `telegram_user_internal_id` | Yes | string | Internal user key |
-| `telegram_user_id` | Yes | string | Telegram user id |
 | `created_at` | Yes | string | Source timestamp used for all time aggregation |
-| `file_name` | Yes | string | Source file name or path-like reference |
 | `transcription_text` | Yes | string | Full transcript body |
 
-If any required column is missing, `ta-batch run` fails.
+If either core column is missing, `ta-batch run` fails.
+
+## Optional Columns
+
+These headers are recognized by the pipeline but are not required:
+
+| Column | Required | Type in pipeline | Meaning |
+|------|------|------|------|
+| `telegram_user_internal_id` | No | string | Internal user key used for optional per-user monthly aggregates |
+| `file_name` | No | string | Source file name or path-like reference used for file metadata features |
+| `id` | No | string | Row or transcription id, preserved when present |
+| `telegram_user_id` | No | string | Telegram user id, preserved when present |
+
+Behavior when optional columns are missing:
+
+- if `telegram_user_internal_id` is absent, `user_time_agg_month.*` is skipped
+- if `file_name` is absent, file-name-derived metadata falls back to empty values
+- if `id` or `telegram_user_id` is absent, the current pipeline continues without them
 
 ## `created_at`
 
@@ -84,17 +97,17 @@ Hello there"
 - `transcription_text` may contain many physical lines inside one CSV cell
 - line count is not the same as row count
 - naive line-based parsing will corrupt the file
-- the pipeline assumes `id` is the first physical column for fast row counting during ETA inference
+- ETA row counting streams only the first physical CSV column; `id` is a common convention, but it is not required
 
 ## File-Naming Notes
 
-`file_name` is also used as metadata input for:
+When present, `file_name` is also used as metadata input for:
 
 - file extension
 - basename token count
 - path depth
 
-The column must exist, but the value may be empty.
+The column may be omitted entirely, and when present its value may still be empty.
 
 ## Spreadsheet Guidance
 
