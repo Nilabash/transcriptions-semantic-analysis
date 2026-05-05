@@ -12,7 +12,7 @@ from transcriptions_analysis.text_format import (
     segment_word_char_counts,
 )
 
-_METRIC_VERSION = "layer_a_v2"
+_METRIC_VERSION = "layer_a_v3"
 
 
 def _normalize_body(seg: ParsedSegment) -> str:
@@ -66,6 +66,10 @@ def empty_layer_a() -> dict[str, Any]:
         "layer_a_speaker_switch_count": 0,
         "layer_a_speaker_switch_rate": 0.0,
         "layer_a_unreasonable_speaker_churn": False,
+        "layer_a_duration_covered_seconds": 0.0,
+        "layer_a_duration_span_seconds": 0.0,
+        "layer_a_duration_coverage_ratio": 0.0,
+        "layer_a_segments_with_duration_ratio": 0.0,
     }
 
 
@@ -114,6 +118,28 @@ def compute_layer_a_for_parsed(t: str, segs: list[ParsedSegment]) -> dict[str, A
     # Heuristic: many switches per segment for short transcript
     unreasonable = switch_count > max(5, len(segs)) and switch_rate > 0.8
 
+    duration_values: list[float] = []
+    starts: list[float] = []
+    ends: list[float] = []
+    duration_ready_segments = 0
+    for seg in segs:
+        start = seg.timestamp_start_s
+        end = seg.timestamp_end_s
+        if start is None or end is None:
+            continue
+        if end <= start:
+            continue
+        duration_ready_segments += 1
+        starts.append(start)
+        ends.append(end)
+        duration_values.append(end - start)
+    duration_covered = float(sum(duration_values))
+    duration_span = float(max(ends) - min(starts)) if starts and ends else 0.0
+    coverage_ratio = (
+        (duration_covered / duration_span) if duration_span > 0 else 0.0
+    )
+    segments_with_duration_ratio = duration_ready_segments / denom
+
     return {
         "layer_a_segment_count": len(segs),
         "layer_a_separator_count": max(sep_count, 0),
@@ -126,6 +152,10 @@ def compute_layer_a_for_parsed(t: str, segs: list[ParsedSegment]) -> dict[str, A
         "layer_a_speaker_switch_count": switch_count,
         "layer_a_speaker_switch_rate": switch_rate,
         "layer_a_unreasonable_speaker_churn": unreasonable,
+        "layer_a_duration_covered_seconds": duration_covered,
+        "layer_a_duration_span_seconds": duration_span,
+        "layer_a_duration_coverage_ratio": coverage_ratio,
+        "layer_a_segments_with_duration_ratio": segments_with_duration_ratio,
     }
 
 

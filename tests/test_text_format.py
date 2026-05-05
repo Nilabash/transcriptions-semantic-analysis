@@ -1,5 +1,6 @@
 from transcriptions_analysis.text_format import (
     count_separator_lines,
+    extract_timestamp_range_seconds,
     is_wellformed_timestamp_line,
     parse_segments,
     split_separator_lines,
@@ -17,6 +18,12 @@ def test_inline_ts_detection():
     assert is_wellformed_timestamp_line("not 00:00:01 - 00:00:02: a timestamp line") is False
 
 
+def test_extract_timestamp_range_seconds_variants():
+    assert extract_timestamp_range_seconds("[00:00:05 - 00:00:09]") == (5.0, 9.0)
+    assert extract_timestamp_range_seconds("00:10:00 - 00:10:30: hello") == (600.0, 630.0)
+    assert extract_timestamp_range_seconds("no timestamp here") is None
+
+
 def test_bracket_speaker_header_and_inline_turns():
     text = """[SPEAKER_01]
 00:00:08 - 00:00:10: First line.
@@ -31,6 +38,8 @@ def test_bracket_speaker_header_and_inline_turns():
     bodies = ["\n".join(s.body_lines) for s in sp01]
     assert any("First line" in b for b in bodies)
     assert any("Second line" in b for b in bodies)
+    assert sp01[0].timestamp_start_s == 8.0
+    assert sp01[0].timestamp_end_s == 10.0
 
 
 def test_split_separators():

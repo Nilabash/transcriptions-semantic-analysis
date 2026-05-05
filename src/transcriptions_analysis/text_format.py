@@ -93,6 +93,34 @@ class ParsedSegment:
     body_lines: list[str]
     has_timestamp: bool
     timestamp_line_malformed: bool
+    timestamp_start_s: float | None = None
+    timestamp_end_s: float | None = None
+
+
+def _timestamp_to_seconds(s: str) -> float | None:
+    parts = _parse_ts_fragment(s)
+    if parts is None:
+        return None
+    h, m, sec = parts
+    return float(h * 3600 + m * 60 + sec)
+
+
+def extract_timestamp_range_seconds(line: str) -> tuple[float | None, float | None] | None:
+    """Parse (start_s, end_s) from bracketed or inline timestamp range on one line."""
+    inline = _TS_INLINE.match(line)
+    if inline:
+        start = _timestamp_to_seconds(inline.group(1))
+        end = _timestamp_to_seconds(inline.group(2))
+        if start is not None and end is not None:
+            return start, end
+        return None
+    br = _TS_BRACKET.search(line)
+    if br:
+        start = _timestamp_to_seconds(br.group(1))
+        end = _timestamp_to_seconds(br.group(2))
+        if start is not None and end is not None:
+            return start, end
+    return None
 
 
 def count_separator_lines(text: str) -> int:
@@ -127,6 +155,8 @@ def parse_segments(text: str) -> list[ParsedSegment]:
         body: list[str],
         ts_ok: bool,
         ts_bad: bool,
+        ts_start_s: float | None,
+        ts_end_s: float | None,
     ) -> None:
         body = [b for b in body]
         if speaker is None and not any(b.strip() for b in body) and not ts_ok:
@@ -137,6 +167,8 @@ def parse_segments(text: str) -> list[ParsedSegment]:
                 body_lines=body,
                 has_timestamp=ts_ok,
                 timestamp_line_malformed=ts_bad,
+                timestamp_start_s=ts_start_s,
+                timestamp_end_s=ts_end_s,
             )
         )
 
@@ -145,16 +177,20 @@ def parse_segments(text: str) -> list[ParsedSegment]:
         body: list[str] = []
         ts_ok = False
         ts_bad = False
+        ts_start_s: float | None = None
+        ts_end_s: float | None = None
         pending_ts_line = False
 
         for line in chunk.splitlines():
             sp_id = match_speaker_line(line)
             if sp_id is not None:
                 if current_speaker is not None or body:
-                    flush_segment(current_speaker, body, ts_ok, ts_bad)
+                    flush_segment(current_speaker, body, ts_ok, ts_bad, ts_start_s, ts_end_s)
                     body = []
                     ts_ok = False
                     ts_bad = False
+                    ts_start_s = None
+                    ts_end_s = None
                 current_speaker = sp_id
                 pending_ts_line = True
                 continue
@@ -165,6 +201,9 @@ def parse_segments(text: str) -> list[ParsedSegment]:
                     ok, bad, rest = inline
                     ts_ok = ok
                     ts_bad = bad
+                    parsed = extract_timestamp_range_seconds(line)
+                    if parsed is not None:
+                        ts_start_s, ts_end_s = parsed
                     pending_ts_line = False
                     if ok and rest.strip():
                         body.append(rest)
@@ -173,6 +212,9 @@ def parse_segments(text: str) -> list[ParsedSegment]:
                     if is_wellformed_timestamp_line(line):
                         ts_ok = True
                         ts_bad = False
+                        parsed = extract_timestamp_range_seconds(line)
+                        if parsed is not None:
+                            ts_start_s, ts_end_s = parsed
                     else:
                         ts_bad = True
                     pending_ts_line = False
@@ -192,10 +234,15 @@ def parse_segments(text: str) -> list[ParsedSegment]:
             if current_speaker is not None:
                 inline_next = split_inline_timestamp_line(line)
                 if inline_next is not None:
-                    flush_segment(current_speaker, body, ts_ok, ts_bad)
+                    flush_segment(current_speaker, body, ts_ok, ts_bad, ts_start_s, ts_end_s)
                     ok, bad, rest = inline_next
                     ts_ok = ok
                     ts_bad = bad
+                    parsed = extract_timestamp_range_seconds(line)
+                    if parsed is not None:
+                        ts_start_s, ts_end_s = parsed
+                    else:
+                        ts_start_s, ts_end_s = None, None
                     body = []
                     if ok and rest.strip():
                         body.append(rest)
@@ -203,7 +250,7 @@ def parse_segments(text: str) -> list[ParsedSegment]:
 
             body.append(line)
 
-        flush_segment(current_speaker, body, ts_ok, ts_bad)
+        flush_segment(current_speaker, body, ts_ok, ts_bad, ts_start_s, ts_end_s)
 
     # Fallback: no separators — treat whole text as one blob and scan for speaker blocks
     if not segments and text.strip():
@@ -220,13 +267,16 @@ def _parse_inline_blocks(text: str) -> list[ParsedSegment]:
     body: list[str] = []
     ts_ok = False
     ts_bad = False
+    ts_start_s: float | None = None
+    ts_end_s: float | None = None
     pending_ts = False
 
     def flush() -> None:
-        nonlocal current_speaker, body, ts_ok, ts_bad, pending_ts
+        nonlocal current_speaker, body, ts_ok, ts_bad, ts_start_s, ts_end_s, pending_ts
         if current_speaker is None and not any(b.strip() for b in body):
             body = []
             ts_ok = ts_bad = False
+            ts_start_s = ts_end_s = None
             pending_ts = False
             return
         segments.append(
@@ -235,10 +285,13 @@ def _parse_inline_blocks(text: str) -> list[ParsedSegment]:
                 body_lines=list(body),
                 has_timestamp=ts_ok,
                 timestamp_line_malformed=ts_bad,
+                timestamp_start_s=ts_start_s,
+                timestamp_end_s=ts_end_s,
             )
         )
         body = []
         ts_ok = ts_bad = False
+        ts_start_s = ts_end_s = None
         pending_ts = False
 
     for line in lines:
@@ -258,6 +311,9 @@ def _parse_inline_blocks(text: str) -> list[ParsedSegment]:
                 ok, bad, rest = inline
                 ts_ok = ok
                 ts_bad = bad
+                parsed = extract_timestamp_range_seconds(line)
+                if parsed is not None:
+                    ts_start_s, ts_end_s = parsed
                 pending_ts = False
                 if ok and rest.strip():
                     body.append(rest)
@@ -265,6 +321,10 @@ def _parse_inline_blocks(text: str) -> list[ParsedSegment]:
             if _TS_BRACKET.search(line):
                 ts_ok = is_wellformed_timestamp_line(line)
                 ts_bad = not ts_ok
+                if ts_ok:
+                    parsed = extract_timestamp_range_seconds(line)
+                    if parsed is not None:
+                        ts_start_s, ts_end_s = parsed
                 pending_ts = False
                 continue
             if line.strip():
@@ -281,6 +341,11 @@ def _parse_inline_blocks(text: str) -> list[ParsedSegment]:
                 ok, bad, rest = inline_next
                 ts_ok = ok
                 ts_bad = bad
+                parsed = extract_timestamp_range_seconds(line)
+                if parsed is not None:
+                    ts_start_s, ts_end_s = parsed
+                else:
+                    ts_start_s, ts_end_s = None, None
                 body = []
                 if ok and rest.strip():
                     body.append(rest)

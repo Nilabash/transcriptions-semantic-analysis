@@ -1,18 +1,20 @@
 # Documentation
 
-This folder contains the deeper technical and operational documentation for the repository. Start with the top-level [README](../README.md) for the project overview, then use the pages here when you need implementation or runbook detail.
+This folder contains the public technical documentation for the project.
 
-| Document | Audience | Purpose |
-|----------|----------|---------|
-| [Architecture](architecture.md) | Engineers, maintainers, analysts | Explains the batch pipeline, package layout, output artifacts, and current system boundaries |
-| [Operations](operations.md) | Anyone running jobs locally or in Docker | Documents Compose behavior, CLI flags, environment variables, output layout, and troubleshooting |
+## Pages
+
+| Document | Purpose |
+|------|------|
+| [data-contract.md](data-contract.md) | Input file format, required columns, transcript format, validation rules |
+| [architecture.md](architecture.md) | Pipeline flow, module layout, and system boundaries |
+| [operations.md](operations.md) | Docker workflow, CLI flags, outputs, and troubleshooting |
+| [development.md](development.md) | Local setup, tests, repo layout, and contributor notes |
 
 ## Suggested Reading Order
 
-1. [README](../README.md) for the high-level project story and quick start.
-2. [Operations](operations.md) if you want to run the pipeline.
-3. [Architecture](architecture.md) if you want to modify or extend the codebase.
-
-## Scope Note
-
-The documents in this folder are intended to stay aligned with the implemented behavior in `src/transcriptions_analysis/` and the public developer workflow exposed by the repository.
+1. [README.md](../README.md)
+2. [data-contract.md](data-contract.md)
+3. [operations.md](operations.md)
+4. [architecture.md](architecture.md)
+5. [development.md](development.md)

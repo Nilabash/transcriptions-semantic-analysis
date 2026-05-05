@@ -60,6 +60,11 @@ DAY_METRICS = [
 
 # Короткие заголовки и пояснения для подписей к рисункам (без повторения про «ведро по дням»).
 METRIC_FRIENDLY: dict[str, tuple[str, str]] = {
+    "layer_a_duration_total_sum_day": (
+        "Суммарная длительность распознанной речи за день",
+        "Сумма layer_a_duration_covered_seconds по всем транскриптам суток (это именно total, а не медиана). "
+        "Фоновые столбцы показывают число транскриптов в этот день.",
+    ),
     "content_category_confidence": (
         "Насколько выигравшая категория доминирует над альтернативами",
         "Отношение силы выбранной основной метки ко второй по силе среди кандидатов (или шкала при отсутствии конкурента). "
@@ -820,6 +825,14 @@ def main(run_id: str, *, output_html: Path | None = None) -> None:
         f"какую долю записей того дня детектор отнёс к какому языку (по трём выдержкам текста: начало, середина, конец). "
         f"Сопоставляйте с объёмом записей в тот же день: в дни с малым числом транскриптов доли «прыгают» сильнее.</figcaption></figure>"
     )
+    dedicated_total_png = figures_root / "day" / "layer_a_duration_total_sum_day.png"
+    if dedicated_total_png.is_file():
+        title, expl = METRIC_FRIENDLY["layer_a_duration_total_sum_day"]
+        gallery_rows.append(
+            f'<figure class="border rounded-xl p-4 bg-white"><img src="{_png_data_uri(dedicated_total_png)}" '
+            f'alt="" loading="lazy" class="w-full"/><figcaption class="caption mt-2">'
+            f"<strong>{escape(title)}</strong> — {escape(expl)}</figcaption></figure>"
+        )
     for name in DAY_METRICS:
         title, expl = METRIC_FRIENDLY.get(name, (name.replace("_", " "), desc_ru.get(name, "")))
         gallery_rows.append(

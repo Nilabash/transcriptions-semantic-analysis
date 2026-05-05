@@ -161,6 +161,53 @@ def build_metrics_dictionary() -> dict[str, Any]:
                 ),
             },
             {
+                "name": "layer_a_duration_covered_seconds",
+                "layer": "A",
+                "unit": "seconds",
+                "description": (
+                    "Sum of positive (end-start) durations across segments with valid parsed timestamp ranges."
+                ),
+                "description_ru": (
+                    "Суммарная длительность (в секундах): сумма положительных (конец-начало) "
+                    "по сегментам с валидно распарсенным временным диапазоном."
+                ),
+            },
+            {
+                "name": "layer_a_duration_span_seconds",
+                "layer": "A",
+                "unit": "seconds",
+                "description": (
+                    "Transcript timeline span in seconds: max(segment_end)-min(segment_start) for valid ranges."
+                ),
+                "description_ru": (
+                    "Ширина временной шкалы транскрипта в секундах: максимум конца минус минимум начала "
+                    "по валидным диапазонам."
+                ),
+            },
+            {
+                "name": "layer_a_duration_coverage_ratio",
+                "layer": "A",
+                "unit": "ratio",
+                "description": (
+                    "Coverage of timestamped speech over timeline span: covered_seconds / span_seconds (0 when span is 0)."
+                ),
+                "description_ru": (
+                    "Покрытие временной шкалы размеченной речью: covered_seconds / span_seconds "
+                    "(0, если span равен 0)."
+                ),
+            },
+            {
+                "name": "layer_a_segments_with_duration_ratio",
+                "layer": "A",
+                "unit": "ratio",
+                "description": (
+                    "Share of segments with valid positive timestamp duration among all parsed segments."
+                ),
+                "description_ru": (
+                    "Доля сегментов с валидной положительной длительностью среди всех распарсенных сегментов."
+                ),
+            },
+            {
                 "name": "layer_b_unicode_replacement_count",
                 "layer": "B",
                 "unit": "count",

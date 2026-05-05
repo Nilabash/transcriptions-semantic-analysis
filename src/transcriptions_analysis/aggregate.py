@@ -51,6 +51,10 @@ NUMERIC_LAYER_A = (
     "layer_a_speaker_switch_count",
     "layer_a_speaker_switch_rate",
     "layer_a_unreasonable_speaker_churn",
+    "layer_a_duration_covered_seconds",
+    "layer_a_duration_span_seconds",
+    "layer_a_duration_coverage_ratio",
+    "layer_a_segments_with_duration_ratio",
 )
 
 NUMERIC_LAYER_AB: tuple[str, ...] = NUMERIC_LAYER_A + NUMERIC_LAYER_B

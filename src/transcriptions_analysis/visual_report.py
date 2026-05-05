@@ -33,6 +33,11 @@ _LANGUAGE_MIX_CAPTION_RU = (
     "поля created_at (один столбец на день); сопоставляйте с графиками метрик по дням и столбцами N."
 )
 
+_DAILY_DURATION_SUM_CAPTION_RU = (
+    "Суммарная длительность распознанной речи за день (сумма layer_a_duration_covered_seconds по всем строкам дня). "
+    "Линия — всего секунд за день; столбцы на второй оси — число транскриптов N в этот день."
+)
+
 
 def load_metric_descriptions_ru(metrics_dictionary_path: Path) -> dict[str, str]:
     """Parse ``metrics_dictionary.json`` for ``description_ru`` keyed by canonical metric ``name``."""
@@ -312,6 +317,65 @@ def write_language_share_stack_figure(df: pl.DataFrame, bucket_col: str, out_png
     plt.close(fig)
 
 
+def write_daily_total_duration_figure(df: pl.DataFrame, out_png: Path) -> None:
+    """
+    Dedicated day-level chart: sum of ``layer_a_duration_covered_seconds`` per day.
+
+    Expects columns ``bucket_day``, ``duration_total_seconds`` and ``n_rows``.
+    """
+    plt, mdates = _configure_matplotlib()
+    if len(df) == 0:
+        return
+    subset = (
+        df.select(["bucket_day", "duration_total_seconds", "n_rows"])
+        .sort("bucket_day")
+        .filter(pl.col("duration_total_seconds").is_not_null())
+    )
+    if len(subset) == 0:
+        return
+
+    xs, is_dates = _xs_for_buckets(subset, "bucket_day")
+    if not is_dates:
+        return
+    total_seconds = subset["duration_total_seconds"].cast(pl.Float64).to_numpy()
+    n_rows = subset["n_rows"].cast(pl.Int64).to_numpy()
+    bw = xs[1] - xs[0] if len(xs) > 1 else 1.0
+    width = bw * 0.62
+    pad = bw * 0.015
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(10, 3.75), layout="constrained")
+    ax.set_title("total duration per day (sum seconds); bars = transcript count per day")
+    ax.plot(xs, total_seconds, color="#1f77b4", linewidth=1.9, label="Total duration (s/day)")
+    ax.set_ylabel("Total duration, seconds/day")
+    ax.grid(True, alpha=0.35)
+
+    ax2 = ax.twinx()
+    ax2.bar(xs - pad, n_rows, width=width, alpha=0.18, color="#444444")
+    ax2.set_ylabel("Transcripts (N)", color="#555555")
+
+    locator = mdates.AutoDateLocator()
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(formatter)
+    plt.setp(ax.xaxis.get_majorticklabels(), rotation=35, ha="right")
+
+    handles1, labels1 = ax.get_legend_handles_labels()
+    legend_bar = plt.Rectangle((0, 0), 1, 1, fc="#444444", alpha=0.18)
+    ax.legend(
+        handles1 + [legend_bar],
+        labels1 + ["N (bars)"],
+        loc="upper left",
+        fontsize="small",
+    )
+
+    try:
+        fig.savefig(out_png, dpi=120)
+    except (MemoryError, OSError, RuntimeError, ValueError) as exc:
+        _LOG.warning("daily_total_duration_png_save_failed path=%s err=%s", out_png, exc)
+    plt.close(fig)
+
+
 def write_visual_report_html(
     run_dir: Path,
     *,
@@ -397,6 +461,14 @@ img { max-width: 100%; height: auto; }
     bucket_key = "day"
     bucket_ru = _BUCKET_LABEL_RU[bucket_key]
     body_inner.append("<section><h2>Числовые метрики по времени</h2>")
+    dedicated_total = run_dir / "figures" / "day" / "layer_a_duration_total_sum_day.png"
+    if dedicated_total.is_file():
+        rel = str(dedicated_total.relative_to(run_dir)).replace("\\", "/")
+        body_inner.append(
+            "<h2>Отдельный график: суммарная длительность по дням</h2>"
+            f"<figure><img src=\"{html_module.escape(rel)}\" alt=\"layer_a_duration_total_sum_day\"/>"
+            f"<figcaption class=\"caption\">{html_module.escape(_DAILY_DURATION_SUM_CAPTION_RU)}</figcaption></figure>"
+        )
     body_inner.append(
         f"<h2>Разрешение: по {bucket_ru}</h2>"
     )
@@ -484,6 +556,28 @@ def export_visual_bundle(
             )
             if lf.is_file():
                 language_rel = str(lf.relative_to(run_dir)).replace("\\", "/")
+
+    parts = sorted((run_dir / "parts").glob("part_*.parquet"))
+    if parts:
+        try:
+            daily_total = (
+                pl.scan_parquet([str(p) for p in parts])
+                .filter(pl.col("created_at_parsed").is_not_null())
+                .with_columns(pl.col("created_at_parsed").dt.truncate("1d").alias("bucket_day"))
+                .group_by("bucket_day")
+                .agg(
+                    pl.col("layer_a_duration_covered_seconds")
+                    .sum()
+                    .alias("duration_total_seconds"),
+                    pl.len().alias("n_rows"),
+                )
+                .sort("bucket_day")
+                .collect(engine="streaming")
+            )
+            out_daily_total = run_dir / "figures" / "day" / "layer_a_duration_total_sum_day.png"
+            write_daily_total_duration_figure(daily_total, out_daily_total)
+        except (TypeError, ValueError, pl.exceptions.PolarsError) as exc:
+            _LOG.warning("daily_total_duration_failed run_dir=%s err=%s", run_dir, exc)
 
     write_visual_report_html(run_dir, language_chart_rel=language_rel)
 

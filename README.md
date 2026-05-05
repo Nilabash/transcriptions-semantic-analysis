@@ -1,177 +1,114 @@
 # Transcriptions Analysis
 
-Docker-first analytics for studying how diarized transcription text changes over time.
+Batch analytics for diarized transcription exports, optimized for large multiline CSV files.
 
-This repository processes a large CSV export of transcriptions, extracts structural and text-level signals from each transcript, and aggregates those signals by day, ISO week, and month. It is designed for repeatable batch analysis first, with optional notebook-based exploration on top.
+The project reads a historical transcription export, extracts structural and text-level signals from each transcript, aggregates them over time, and writes reproducible artifacts for analysis and reporting.
 
-## What This Project Does
+## At A Glance
 
-- Ingests a large UTF-8 BOM CSV with multiline quoted `transcription_text` fields.
-- Parses diarized transcript structure such as speaker labels and timestamped segments.
-- Computes per-row quality-oriented features.
-- Aggregates metrics over time using `created_at`.
-- Exports machine-readable artifacts and human-readable reports.
+- Input: one UTF-8 CSV export with multiline `transcription_text`
+- Runtime: Docker-first, Python 3.11, Polars
+- Main CLI: `ta-batch`
+- Output: Parquet, CSV, PNG charts, `report.html`, `manifest.json`
+- Scope today: Layer A and Layer B descriptive metrics, not reference-based ASR accuracy
 
-Today the implemented pipeline includes:
+## What It Analyzes
 
-- **Layer A:** structural and schema-faithful transcript signals.
-- **Layer B:** text statistics, language detection, metadata-derived features, and rule-based content categorization.
-- **Visual export:** PNG figures, tidy long-form CSVs, and a single `report.html` artifact.
+- Transcript structure: segments, speakers, timestamps, speaker switches
+- Duration from timestamps: covered seconds, timeline span, coverage ratio, timestamped-segment ratio
+- Text quality proxies: token counts, entropy, odd Unicode, repeated characters
+- Language and script mix
+- File-name metadata
+- Rule-based content categories
+- Time buckets from `created_at`: day, ISO week, month
 
-## Why It Exists
+## Input Requirements
 
-The main goal is to make transcription-quality analysis reproducible on a large historical dataset. The repository is built around a practical workflow:
+The batch pipeline expects a CSV file, not an `.xlsx` file.
 
-1. Run the batch pipeline on the source export.
-2. Produce stable artifacts for inspection and comparison.
-3. Use those artifacts to study quality drift, content-mix changes, and operational anomalies over time.
+If the source is managed in Excel, export it to CSV first and keep these exact column names:
 
-The current system is descriptive rather than evaluative: it measures observable signals in transcript text and structure, but it does not yet implement reference-based accuracy metrics such as WER/CER.
+| Column | Required | Notes |
+|------|------|------|
+| `id` | Yes | Row identifier |
+| `telegram_user_internal_id` | Yes | Internal user key |
+| `telegram_user_id` | Yes | Telegram user id |
+| `created_at` | Yes | Format: `YYYY-MM-DD HH:MM:SS` |
+| `file_name` | Yes | Source file name or path-like reference |
+| `transcription_text` | Yes | Full diarized transcript, may span many CSV lines |
 
-## Repository Map
-
-| Path | Purpose |
-|------|---------|
-| `src/transcriptions_analysis/` | Core ingest, parsing, metrics, aggregation, artifacts, and CLI code |
-| `scripts/` | Helper scripts such as the final report builder and ad-hoc CSV analysis |
-| `tests/` | Pytest coverage for ingest, parsing, metrics, aggregation, and reporting |
-| `docs/` | Architecture and operations documentation |
-| `outputs/` | Generated run artifacts (gitignored) |
+More detail: [docs/data-contract.md](docs/data-contract.md)
 
 ## Quick Start
 
-### Run with Docker Compose
-
-The default workflow is Docker-first.
-
-1. Place one input CSV in the repository root, or set `INPUT_CSV` explicitly.
-2. Build the analytics image.
-3. Run a bounded batch first to validate the environment.
+Build the image and run a bounded smoke batch:
 
 ```bash
 docker compose build analytics
 docker compose run --rm -e MAX_ROWS=500 analytics
 ```
 
-By default:
-
-- the repository is mounted read-only at `/data` inside the container
-- generated artifacts are written to `./outputs` on the host and `/out` in the container
-- if `INPUT_CSV` is unset, the entrypoint auto-detects a single top-level `/data/*.csv`
-
-Smoke test with the fixture dataset:
+Use the fixture file for a minimal end-to-end check:
 
 ```bash
 docker compose run --rm -e INPUT_CSV=/data/tests/fixtures/sample_multiline.csv -e MAX_ROWS=10 analytics
 ```
 
-### Expected Output
+By default:
 
-Each run creates `outputs/<run_id>/` with artifacts such as:
+- the repository is mounted read-only at `/data`
+- generated artifacts are written to `./outputs` on the host and `/out` in the container
+- if `INPUT_CSV` is unset, the entrypoint auto-detects a single top-level `/data/*.csv`
+
+## Main Commands
+
+| Command | Purpose |
+|------|------|
+| `ta-batch run -i PATH [-o DIR]` | Run the analytics pipeline |
+| `ta-batch staging-parquet -i PATH -o OUT.parquet` | Convert CSV to Parquet without feature extraction |
+| `python scripts/build_final_research_report.py --run-id <uuid>` | Build a standalone final HTML report from an existing run |
+| `python scripts/analyze_raw_transcriptions.py` | Run an ad-hoc raw CSV summary outside the batch pipeline |
+
+## Output Artifacts
+
+Each run creates `outputs/<run_id>/` with:
 
 - `parts/part_*.parquet`
-- `time_agg_day|iso_week|month.{parquet,csv}`
-- `time_agg_day|iso_week|month_long.csv`
-- `language_share_time_agg_*.{parquet,csv}` when Layer B is enabled
-- `content_category_share_time_agg_*.{parquet,csv}` when Layer B is enabled
-- `file_extension_share_time_agg_month.{parquet,csv}` when Layer B is enabled
-- `user_time_agg_month.{parquet,csv}` unless disabled
+- `time_agg_day.csv|parquet`
+- `time_agg_iso_week.csv|parquet`
+- `time_agg_month.csv|parquet`
+- `time_agg_*_long.csv`
+- `language_share_time_agg_*` when Layer B is enabled
+- `content_category_share_time_agg_*` when Layer B is enabled
+- `file_extension_share_time_agg_month.*` when Layer B is enabled
+- `user_time_agg_month.*` unless disabled
 - `figures/**/*.png`
-- `report.html`
+- `report.html` built-in HTML report, currently Russian-language
 - `manifest.json`
 - `metrics_dictionary.json`
 
-## CLI
+## Documentation
 
-The package exposes `ta-batch`:
-
-| Command | Purpose |
-|---------|---------|
-| `ta-batch run -i PATH [-o DIR]` | Run the batch pipeline on a CSV |
-| `ta-batch staging-parquet -i PATH -o OUT.parquet` | Convert CSV to staged Parquet without metric extraction |
-
-Common options on `ta-batch run` include:
-
-- `--max-rows` for bounded smoke runs
-- `--batch-size` to reduce peak memory pressure
-- `--no-layer-b` for faster Layer A-only runs
-- `--no-user-stratify` to skip per-user monthly aggregates
-- `--no-export-report` to skip figures and HTML output
-- `--total-rows` or inferred row counting for ETA support
-
-Run `ta-batch run --help` for the full flag set.
-
-## Final Research Report
-
-You can build a standalone final HTML report from an existing run:
-
-```powershell
-python scripts\build_final_research_report.py --run-id <uuid>
-```
-
-Optional output path:
-
-```powershell
-python scripts\build_final_research_report.py --run-id <uuid> -o outputs\my_final_report.html
-```
-
-The builder expects a completed run under `outputs/<uuid>/` and embeds daily PNG figures directly into the HTML as base64 data URIs.
+- [docs/README.md](docs/README.md): documentation index
+- [docs/data-contract.md](docs/data-contract.md): input schema and transcript format
+- [docs/architecture.md](docs/architecture.md): pipeline and code structure
+- [docs/operations.md](docs/operations.md): Docker, CLI, outputs, troubleshooting
+- [docs/development.md](docs/development.md): local development and contributor workflow
 
 ## Local Development
-
-Python `3.11+` is required.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 pytest
-ta-batch run --help
 ```
-
-Key dependencies:
-
-- `polars[rtcompat]`
-- `lingua-language-detector`
-- `matplotlib`
-- `duckdb` for future SQL-on-Parquet workflows
-
-## Testing
-
-The repository includes pytest coverage for:
-
-- multiline CSV ingest
-- diarized transcript parsing
-- Layer A and Layer B metrics
-- categorical aggregation
-- progress display
-- visual-report generation
-
-Run locally:
-
-```powershell
-pytest
-```
-
-Run inside Docker:
-
-```bash
-docker compose run --rm --entrypoint python analytics -m pytest /workspace/tests
-```
-
-## Documentation
-
-- [docs/README.md](docs/README.md): documentation hub
-- [docs/architecture.md](docs/architecture.md): pipeline, modules, and outputs
-- [docs/operations.md](docs/operations.md): Docker, CLI, environment variables, and troubleshooting
 
 ## Current Boundaries
 
-The current batch path does **not** yet implement:
+The default batch path does not yet include:
 
-- reference-based quality metrics such as WER/CER
-- Layer C or human-in-the-loop evaluation workflows
-- CI/CD automation
-- productionized DuckDB query flows in the default pipeline
-
-Those ideas are tracked in the architecture and operations docs, but the README reflects only what is implemented today.
+- WER, CER, or other reference-based ASR metrics
+- human evaluation workflows
+- CI automation
+- DuckDB-based reporting in the default pipeline

@@ -102,6 +102,18 @@ def test_export_visual_bundle_smoke(tmp_path: Path) -> None:
     agg_m.write_parquet(run / "time_agg_month.parquet")
     agg_w.write_parquet(run / "time_agg_iso_week.parquet")
     agg_d.write_parquet(run / "time_agg_day.parquet")
+    parts = run / "parts"
+    parts.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(
+        {
+            "created_at_parsed": [
+                datetime(2024, 5, 1, 10, 0, 0),
+                datetime(2024, 5, 1, 12, 0, 0),
+                datetime(2024, 5, 8, 9, 0, 0),
+            ],
+            "layer_a_duration_covered_seconds": [120.0, 180.0, 300.0],
+        }
+    ).write_parquet(parts / "part_00000.parquet")
 
     write_metrics_dictionary(run / "metrics_dictionary.json")
 
@@ -117,6 +129,7 @@ def test_export_visual_bundle_smoke(tmp_path: Path) -> None:
     report_body = html.read_text(encoding="utf-8")
     assert "Итоговый визуальный отчёт аналитического прогона" in report_body
     assert "figures/day/layer_a_segment_count.png" in report_body
+    assert "figures/day/layer_a_duration_total_sum_day.png" in report_body
     assert "Смысл показателя: Число сегментов диаризации" in report_body
     assert not (run / "result.html").exists()
 

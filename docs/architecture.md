@@ -2,71 +2,115 @@
 
 ## Scope
 
-This repository implements a **Docker-first batch analytics** stack for a single large CSV of diarized transcriptions. **Layer A** (structural / schema-faithful signals) and **Layer B v3** (Unicode/lexical stats, script ratios, **lingua** language ID, `file_name` metadata, plus **`content_category`** rule-based primary labels and confidence) are computed per row, then aggregated over **calendar day**, **ISO week**, and **calendar month** using `created_at`. When Layer B is enabled, optional outputs include **language share**, **content primary category share**, and **file extension share** per bucket, plus **per-user × month** numeric summaries.
+The repository implements a Docker-first batch pipeline for one large CSV export of diarized transcriptions.
 
-Methodology and definitions of “quality” may evolve as the analysis framework matures; this document focuses on the currently implemented pipeline.
+Current implemented layers:
 
-## High-level data flow
+- Layer A: structural transcript metrics
+- Layer B: text, language, script, metadata, and content-category metrics
+- Visual export: long CSV, PNG charts, and `report.html`
 
-```mermaid
-flowchart LR
-  CSV[CSV_UTF8_BOM]
-  Count[Optional_scan_column_0_only]
-  Scan[Wide_scan_batches]
-  Feat[Layer_A_and_B_per_row]
-  Parts[parts_part_parquet]
-  Agg[Group_by_time_buckets]
-  Shares[Language_category_extension_shares]
-  UserM[user_month_stratify]
-  Out[time_agg_and_manifest]
-  CSV --> Count
-  Count --> Scan --> Feat --> Parts --> Agg --> Out
-  Feat --> Shares --> Out
-  Agg --> UserM --> Out
+## Pipeline
+
+```text
+CSV -> batched ingest -> transcript parsing -> Layer A/B features
+    -> part Parquet files -> time aggregates -> optional share tables
+    -> manifest + metrics dictionary -> visual bundle
 ```
 
-0. **`count_phase` (default on interactive full runs):** `ingest.count_csv_logical_rows_first_column` streams **only column index 0** (`id`) to tally logical CSV rows cheaply before ETA + **read_phase** (still quote-aware).
+## Processing Stages
 
-1. **Ingest (read_phase):** `transcriptions_analysis.ingest.read_csv_batches` uses full columns via `scan_csv` + `collect_batches` so **multiline quoted fields** stay valid (RFC 4180–style). UTF-8 BOM is handled by renaming affected column names (for example `\ufeffid` → `id`).
-2. **Features:** Each row’s `transcription_text` is parsed once (`text_format.parse_segments`); **Layer A** (`metrics_layer_a`) and optional **Layer B** (`metrics_layer_b`, `content_*` helpers) add scalar columns. Layer B can be disabled with `--no-layer-b`.
-3. **Persistence:** Each batch is written to `outputs/<run_id>/parts/part_XXXXX.parquet`.
-4. **Aggregate:** Rows with parseable `created_at` are bucketed; **median**, **Q1**, **Q3**, and **n_rows** are computed per numeric metric column and written as Parquet + CSV. When Layer B is on, **categorical share** tables (language, **`content_primary_category`**, file extension) and **user × month** aggregates are written (unless opted out — see [Operations](operations.md)).
-5. **Visual export (default on):** Reads aggregate Parquets back from disk and builds **tidy long CSVs**, **matplotlib** PNGs (median ± IQR + N) for day / ISO-week / month buckets, a **stacked daily language-mix** figure when Layer B ran, and **`report.html`** — one Russian page with **day-only** metric plots (week/month plots remain as files under `figures/`) — see `transcriptions_analysis.visual_report`.
-6. **Provenance:** `manifest.json` and `metrics_dictionary.json` are written alongside aggregates (see [Operations](operations.md)).
+1. Ingest
+   Reads the CSV in logical-row batches with Polars so multiline transcript cells remain intact.
+2. Parse
+   Extracts speaker blocks, timestamps, and segment bodies from `transcription_text`.
+3. Feature extraction
+   Computes Layer A metrics and optional Layer B metrics for each row.
+4. Persist
+   Writes per-batch Parquet parts under `outputs/<run_id>/parts/`.
+5. Aggregate
+   Buckets rows by day, ISO week, and month using `created_at`.
+6. Export
+   Writes CSV, Parquet, PNG, HTML, and provenance artifacts.
 
-## Python package layout (`src/transcriptions_analysis/`)
+## Main Modules
 
 | Module | Responsibility |
-|--------|----------------|
-| `ingest` | Batched CSV reads, optional logical row count via column 0, BOM normalization, fingerprint for manifest |
-| `text_format` | Diarized layout: separators, `SPEAKER_*`, bracketed timestamps |
-| `metrics_layer_a` | Per-transcript Layer A features; `compute_layer_a_for_parsed` avoids double-parse with Layer B |
-| `content_text` | Unicode oddities, script ratios, lexical stats on segment bodies |
-| `content_category` | Rule-based **`content_primary_category`** + **`content_category_confidence`** from cleaned segment bodies + `ParsedSegment.speaker` structure (`CONTENT_CATEGORY_RULES_VERSION=v2_strength_primary`) |
-| `content_language` | Singleton **lingua** `LanguageDetector` with ISO allow-list |
-| `content_metadata` | `file_name` → extension, basename tokens, path depth |
-| `metrics_layer_b` | Layer B + content columns; `NUMERIC_LAYER_B` for aggregates (includes `content_category_confidence`; category string is categorical, not in numeric union) |
-| `aggregate` | `created_at` parsing (naive), bucket columns, `aggregate_bucket`, `aggregate_categorical_share`, `aggregate_user_month` |
-| `artifacts` | `RunManifest`, `metrics_dictionary.json`, combined metric version string, lockfile hashing |
-| `visual_report` | Long-format aggregate CSVs, matplotlib PNGs (median + IQR + N), stacked language share (daily for HTML), single RU `report.html` (day metric charts) |
-| `cli` | `ta-batch` entrypoint (`run`, `staging-parquet`) |
-| `logging_utils` | Key=value structured log lines for batch jobs |
+|------|------|
+| `ingest.py` | CSV reading, BOM normalization, fast row counting, input fingerprinting |
+| `text_format.py` | Transcript parsing for separators, speakers, and timestamps |
+| `metrics_layer_a.py` | Structural metrics per transcript |
+| `metrics_layer_b.py` | Text, language, script, metadata, and content-category metrics |
+| `aggregate.py` | Time buckets and aggregate tables |
+| `artifacts.py` | `manifest.json` and `metrics_dictionary.json` |
+| `visual_report.py` | Long CSV, PNG charts, `report.html` |
+| `cli.py` | `ta-batch` commands |
 
-## Final report builder
+## Time Buckets
 
-`scripts/build_final_research_report.py` builds `outputs/final_research_report.html` from an existing run under `outputs/<run_id>/`:
+All aggregation is based on parsed `created_at`:
 
-- Inputs: `manifest.json`, monthly category/language share CSVs, `metrics_dictionary.json`, and `figures/**/*.png`.
-- CLI: `--run-id <uuid>`, optional `-o/--output`, or `FINAL_REPORT_RUN_ID` env var.
-- Daily PNG assets are embedded as base64 data URIs to produce a portable HTML file.
+- day: truncated datetime
+- ISO week: `%G-W%V`
+- month: first day of month
 
-**Declared but not yet used in batch code paths:** `duckdb` (dependency reserved for SQL-on-Parquet exploration).
+Timestamps are currently treated as naive datetimes.
 
-## Docker images
+## Output Model
 
-- **`base` target:** batch image; non-root user `ta` (uid 1000); entrypoint runs `ta-batch` via `scripts/docker-entrypoint-analytics.sh`.
-- **`notebook` target:** adds JupyterLab; Compose **profile** `notebook` exposes port 8888.
+The pipeline produces:
 
-## Out of scope (current code)
+- per-row batch parts
+- numeric time aggregates
+- categorical share tables
+- optional per-user monthly aggregates
+- reproducibility metadata
+- human-readable charts and HTML
 
-- **Layer C** metrics, CI pipelines, and dedicated DuckDB SQL scripts are **not** implemented in the default batch path (static **matplotlib** summaries are generated by default when `--export-report` is on).
+## Layer Summary
+
+### Layer A
+
+Examples:
+
+- segment count
+- distinct speaker count
+- malformed timestamp ratio
+- speaker switch count
+- duplicate adjacent segment ratio
+- duration covered seconds (sum of valid segment durations)
+- duration span seconds (max end minus min start)
+- duration coverage ratio
+- ratio of segments with valid positive durations
+
+### Layer B
+
+Examples:
+
+- Unicode oddity counts
+- token diversity and entropy
+- language detection
+- script ratios
+- file-name metadata
+- `content_primary_category`
+- `content_category_confidence`
+
+## Built-in Report
+
+The default visual bundle writes:
+
+- `time_agg_*_long.csv`
+- PNG charts for day, ISO week, and month
+- `report.html`
+- dedicated daily total-duration chart: `figures/day/layer_a_duration_total_sum_day.png` (sum over rows by day)
+
+The built-in `report.html` is a compact human-facing summary generated from run artifacts. The current implementation is Russian-language and focuses on daily metric charts and daily language-share visualization when Layer B is enabled.
+
+## Non-Goals In Current Code
+
+The default pipeline does not yet implement:
+
+- reference-based transcription accuracy metrics
+- human evaluation loops
+- CI-driven production workflows
+- DuckDB-powered reporting as part of the main run path
