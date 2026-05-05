@@ -87,6 +87,45 @@ Each run creates `outputs/<run_id>/` with:
 - `manifest.json`
 - `metrics_dictionary.json`
 
+## Build A Research Report From An Existing Run
+
+Use `scripts/build_final_research_report.py` after `ta-batch run` when you want a single handoff HTML document built from the saved analysis artifacts.
+
+Example:
+
+```powershell
+python scripts\build_final_research_report.py --run-id <uuid>
+```
+
+The script reads `outputs/<uuid>/` and writes `outputs/final_research_report.html` by default. You can override the destination:
+
+```powershell
+python scripts\build_final_research_report.py --run-id <uuid> -o outputs\my_final_report.html
+```
+
+You can also provide the run id through `FINAL_REPORT_RUN_ID`:
+
+```powershell
+$env:FINAL_REPORT_RUN_ID = "<uuid>"
+python scripts\build_final_research_report.py
+```
+
+The report is built from analysis outputs already on disk. In the current implementation it requires:
+
+- `manifest.json`
+- `metrics_dictionary.json`
+- `time_agg_month.csv`
+- `content_category_share_time_agg_month.csv`
+- `language_share_time_agg_month.csv`
+- `figures/**/*.png`
+
+What you get:
+
+- a standalone `final_research_report.html`
+- monthly content-category and language summaries rendered with Chart.js in the browser
+- daily PNG charts embedded into the HTML as base64 data URIs
+- the dedicated daily total-duration chart when `figures/day/layer_a_duration_total_sum_day.png` exists
+
 ## Documentation
 
 - [docs/README.md](docs/README.md): documentation index

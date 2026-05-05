@@ -108,11 +108,17 @@ Notes:
 
 ### Final research report
 
+`scripts/build_final_research_report.py` is a second-stage report builder. Run it after `ta-batch run` when the batch output already exists in `outputs/<run_id>/`.
+
 Build from an existing run:
 
 ```powershell
 python scripts\build_final_research_report.py --run-id <uuid>
 ```
+
+Default output:
+
+- `outputs/final_research_report.html`
 
 Optional output path:
 
@@ -120,10 +126,38 @@ Optional output path:
 python scripts\build_final_research_report.py --run-id <uuid> -o outputs\my_final_report.html
 ```
 
+You can also supply the run id through the environment:
+
+```powershell
+$env:FINAL_REPORT_RUN_ID = "<uuid>"
+python scripts\build_final_research_report.py
+```
+
+The script expects these run artifacts:
+
+| Path inside `outputs/<run_id>/` | Purpose |
+|------|------|
+| `manifest.json` | Validates that the run folder exists and provides run metadata |
+| `metrics_dictionary.json` | Metric names and report captions |
+| `time_agg_month.csv` | Monthly numeric metrics used for narrative summaries |
+| `content_category_share_time_agg_month.csv` | Monthly content-category mix |
+| `language_share_time_agg_month.csv` | Monthly language mix |
+| `figures/**/*.png` | Daily metric figures embedded into the final HTML |
+
 Notes:
 
-- `build_final_research_report.py` now embeds the dedicated daily total-duration chart when `figures/day/layer_a_duration_total_sum_day.png` exists.
+- The generated HTML is intended as a shareable research deliverable, separate from the built-in `report.html`.
+- PNG figures are embedded as base64 data URIs, so the final HTML does not need the original `figures/` directory at viewing time.
+- Monthly content-category and language sections are rendered from the share CSVs and `time_agg_month.csv`.
+- `build_final_research_report.py` embeds the dedicated daily total-duration chart when `figures/day/layer_a_duration_total_sum_day.png` exists.
 - The script keeps backward compatibility with older runs that do not have this chart.
+- If `manifest.json` is missing or the run id does not resolve to `outputs/<run_id>/`, the script exits with an error.
+
+Recommended flow:
+
+1. Run `ta-batch run`.
+2. Inspect `outputs/<run_id>/report.html` and the aggregate files if needed.
+3. Build `final_research_report.html` from the same `run_id` for a self-contained research handoff.
 
 ## Jupyter
 

@@ -9,6 +9,7 @@ Current implemented layers:
 - Layer A: structural transcript metrics
 - Layer B: text, language, script, metadata, and content-category metrics
 - Visual export: long CSV, PNG charts, and `report.html`
+- Research handoff export: standalone `final_research_report.html` built from a completed run folder
 
 ## Pipeline
 
@@ -16,6 +17,7 @@ Current implemented layers:
 CSV -> batched ingest -> transcript parsing -> Layer A/B features
     -> part Parquet files -> time aggregates -> optional share tables
     -> manifest + metrics dictionary -> visual bundle
+    -> optional final research report build from outputs/<run_id>/
 ```
 
 ## Processing Stages
@@ -45,6 +47,15 @@ CSV -> batched ingest -> transcript parsing -> Layer A/B features
 | `artifacts.py` | `manifest.json` and `metrics_dictionary.json` |
 | `visual_report.py` | Long CSV, PNG charts, `report.html` |
 | `cli.py` | `ta-batch` commands |
+
+## Reporting Layers
+
+The repository has two HTML reporting surfaces:
+
+- `report.html`: built automatically by `ta-batch run` from run artifacts; compact, Russian-language, and centered on daily charts
+- `final_research_report.html`: built later by `scripts/build_final_research_report.py` from an existing `outputs/<run_id>/`; intended as a standalone research handoff
+
+The final research report reuses saved aggregates instead of recomputing features. It reads `manifest.json`, `metrics_dictionary.json`, monthly share CSVs, `time_agg_month.csv`, and PNG figures from the completed run folder.
 
 ## Time Buckets
 
@@ -105,6 +116,8 @@ The default visual bundle writes:
 - dedicated daily total-duration chart: `figures/day/layer_a_duration_total_sum_day.png` (sum over rows by day)
 
 The built-in `report.html` is a compact human-facing summary generated from run artifacts. The current implementation is Russian-language and focuses on daily metric charts and daily language-share visualization when Layer B is enabled.
+
+The separate `final_research_report.html` is a second-stage artifact. It embeds daily PNG figures as base64 data URIs and adds a broader research-style narrative based on the monthly aggregate CSVs and share tables in `outputs/<run_id>/`.
 
 ## Non-Goals In Current Code
 
