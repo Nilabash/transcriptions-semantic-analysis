@@ -1,0 +1,13 @@
+id,telegram_user_internal_id,telegram_user_id,created_at,file_name,transcription_text
+u1,i1,tg1,2024-01-15 10:00:00,a.wav,"--------------------------------------------------------------------------------
+SPEAKER_00
+[00:00:00 - 00:00:02]
+Hello there
+
+--------------------------------------------------------------------------------
+SPEAKER_01
+[00:00:02 - 00:00:05]
+Hi back"
+u2,i2,tg2,2024-02-20 12:30:00,b.wav,"SPEAKER_00
+[bad ts line]
+No separator body"

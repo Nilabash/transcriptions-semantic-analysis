@@ -1,0 +1,50 @@
+services:
+  analytics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    image: transcriptions-analysis:local
+    environment:
+      INPUT_CSV: ${INPUT_CSV:-}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/out}
+      MAX_ROWS: ${MAX_ROWS:-}
+      RUN_ID: ${RUN_ID:-}
+      BATCH_SIZE: ${BATCH_SIZE:-}
+      TOTAL_ROWS: ${TOTAL_ROWS:-}
+      PROGRESS: ${PROGRESS:-}
+      INFER_TOTAL_ROWS: ${INFER_TOTAL_ROWS:-}
+      LAYER_B: ${LAYER_B:-}
+      LANG_DETECT_MAX_CHARS: ${LANG_DETECT_MAX_CHARS:-}
+      LANG_DETECT_LANGUAGES: ${LANG_DETECT_LANGUAGES:-}
+      USER_STRATIFY: ${USER_STRATIFY:-}
+      EXPORT_REPORT: ${EXPORT_REPORT:-}
+    volumes:
+      - type: bind
+        source: .
+        target: /data
+        read_only: true
+      - type: bind
+        source: ./outputs
+        target: /out
+    working_dir: /out
+
+  notebook:
+    profiles:
+      - notebook
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: notebook
+    image: transcriptions-analysis:notebook
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    environment:
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-}
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+        read_only: false
+    working_dir: /workspace
+    user: "1000:1000"
