@@ -10,6 +10,7 @@ Current implemented layers:
 - Layer B: text, language, script, metadata, and content-category metrics
 - Visual export: long CSV, PNG charts, and `report.html`
 - Research handoff export: standalone `final_research_report.html` built from a completed run folder
+- LLM judge handoff: deterministic monthly sample packet for ChatGPT-based qualitative review
 
 ## Pipeline
 
@@ -78,6 +79,12 @@ The pipeline produces:
 - reproducibility metadata
 - human-readable charts and HTML
 
+The separate LLM judge sampler reads the raw CSV directly, uses fast Layer A/B style feature proxies for monthly balancing, and writes `llm_judge_packet.md` plus audit files. By default it writes to `outputs/llm_judge/`; for independent research passes it supports `--run-id` child folders such as `outputs/llm_judge_runs/russian-2026-05-06-r2/`. It does not change the main `ta-batch run` artifact contract.
+
+The sampler can filter the candidate pool for Russian transcripts with `--russian-only` (`--language-filter ru`) and can skip transcript IDs from prior `llm_judge_sample_index.csv` files with `--exclude-sample-index`, which is useful for second-pass sampling.
+
+After external ChatGPT judging, `scripts/analyze_llm_judge_output.py` validates the returned JSON, joins transcript scores back to `llm_judge_sample_index.csv`, and writes joined score, monthly score, failure-mode, Markdown analysis, and standalone visual HTML report artifacts into the same resolved judge run folder.
+
 ## Layer Summary
 
 ### Layer A
@@ -127,3 +134,5 @@ The default pipeline does not yet implement:
 - human evaluation loops
 - CI-driven production workflows
 - DuckDB-powered reporting as part of the main run path
+
+The LLM judge packet is a handoff artifact for external model review. The repository can summarize the returned judge JSON, but it does not yet merge those scores into the main `ta-batch run` reports.

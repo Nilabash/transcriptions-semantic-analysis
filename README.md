@@ -67,6 +67,8 @@ By default:
 | `ta-batch run -i PATH [-o DIR]` | Run the analytics pipeline |
 | `ta-batch staging-parquet -i PATH -o OUT.parquet` | Convert CSV to Parquet without feature extraction |
 | `python scripts/build_final_research_report.py --run-id <uuid>` | Build a standalone final HTML report from an existing run |
+| `python scripts/build_llm_judge_sample.py` | Build a deterministic ChatGPT-ready LLM judge sample packet |
+| `python scripts/analyze_llm_judge_output.py` | Summarize ChatGPT judge JSON into CSV and Markdown outputs |
 | `python scripts/analyze_raw_transcriptions.py` | Run an ad-hoc raw CSV summary outside the batch pipeline |
 
 ## Output Artifacts
@@ -125,6 +127,51 @@ What you get:
 - monthly content-category and language summaries rendered with Chart.js in the browser
 - daily PNG charts embedded into the HTML as base64 data URIs
 - the dedicated daily total-duration chart when `figures/day/layer_a_duration_total_sum_day.png` exists
+
+## Build An LLM Judge Packet
+
+Use `scripts/build_llm_judge_sample.py` when you want a compact file for ChatGPT-based qualitative judging instead of sending the raw CSV.
+
+```powershell
+python scripts\build_llm_judge_sample.py
+```
+
+Default outputs are written to `outputs/llm_judge/`. For repeatable research runs, use `--run-id` so each packet and returned report has its own folder:
+
+```powershell
+python scripts\build_llm_judge_sample.py `
+  --output-dir outputs\llm_judge_runs `
+  --run-id russian-2026-05-06-r2 `
+  --russian-only `
+  --exclude-sample-index outputs\llm_judge\llm_judge_sample_index.csv
+```
+
+This writes to `outputs/llm_judge_runs/russian-2026-05-06-r2/` and filters the candidate pool to Russian (`ru`) transcripts. `--exclude-sample-index` is optional, but useful when a follow-up run should avoid transcript IDs already used in a previous packet.
+
+Each run folder contains:
+
+- `llm_judge_packet.md`: one ChatGPT-ready file containing the prompt and sampled transcripts
+- `llm_judge_prompt.md`: the reusable judging prompt only
+- `llm_judge_sample_index.csv`: selected row metadata and sampling reasons
+- `llm_judge_transcripts.jsonl`: machine-readable transcript excerpts
+
+The sampler is deterministic by seed and selects a balanced monthly panel using month, content category, script/language proxy, transcript length, speaker structure, and anomaly signals.
+
+After ChatGPT returns JSON, save it as `llm_judge_output.json` inside the same run folder and run:
+
+```powershell
+python scripts\analyze_llm_judge_output.py `
+  --output-dir outputs\llm_judge_runs `
+  --run-id russian-2026-05-06-r2
+```
+
+This writes:
+
+- `llm_judge_joined_scores.csv`: one row per judged transcript joined to sample metadata
+- `llm_judge_monthly_scores.csv`: monthly means for all samples and representative-only rows
+- `llm_judge_failure_modes.csv`: failure-mode counts by month and sample group
+- `llm_judge_analysis.md`: compact Markdown analysis report
+- `llm_judge_research_report.html`: standalone Russian-language visual research report
 
 ## Documentation
 
