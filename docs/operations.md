@@ -144,6 +144,8 @@ Defaults:
 | `figures/**/*.png` | Trend charts |
 | `figures/day/layer_a_duration_total_sum_day.png` | Dedicated daily total duration chart (sum of `layer_a_duration_covered_seconds`) |
 | `report.html` | Built-in HTML report |
+| `duration_distribution_report.html` | Optional standalone duration-distribution report (built by script) |
+| `duration_distribution_monthly_stats.csv` | Optional monthly duration stats export (built by script) |
 | `manifest.json` | Run metadata and input fingerprint |
 | `metrics_dictionary.json` | Metric definitions |
 
@@ -235,6 +237,44 @@ Recommended flow:
 1. Run `ta-batch run`.
 2. Inspect `outputs/<run_id>/report.html` and the aggregate files if needed.
 3. Build `final_research_report.html` from the same `run_id` for a self-contained research handoff.
+
+### Duration distribution report
+
+`scripts/build_duration_distribution_report.py` is a run-folder report builder focused on transcription duration analysis.
+
+Build from an existing run:
+
+```powershell
+python scripts\build_duration_distribution_report.py --run-id <uuid>
+```
+
+Optional explicit input CSV:
+
+```powershell
+python scripts\build_duration_distribution_report.py `
+  --run-id <uuid> `
+  --input-csv d:\path\to\transcriptions.csv
+```
+
+Optional explicit output HTML:
+
+```powershell
+python scripts\build_duration_distribution_report.py `
+  --run-id <uuid> `
+  --output-html outputs\my_duration_report.html
+```
+
+Default outputs:
+
+- `outputs/<run_id>/duration_distribution_report.html`
+- `outputs/<run_id>/duration_distribution_monthly_stats.csv`
+
+What this report adds:
+
+- month-level duration distributions from recomputed per-row `layer_a_duration_covered_seconds`
+- month-level statistics: variance, stddev, percentiles
+- dedicated last-30-days section with explicit date range
+- interactive monthly distribution charts with legend toggle, zoom, pan, and reset buttons
 
 ## Jupyter
 

@@ -66,3 +66,4 @@ The existing tests cover:
 |------|------|
 | `scripts/analyze_raw_transcriptions.py` | Ad-hoc raw CSV summary outside `ta-batch` |
 | `scripts/build_final_research_report.py` | Builds a standalone final HTML from an existing run |
+| `scripts/build_duration_distribution_report.py` | Builds a standalone duration-distribution HTML and monthly duration stats CSV from an existing run |

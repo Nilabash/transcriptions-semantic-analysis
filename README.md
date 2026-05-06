@@ -67,6 +67,7 @@ By default:
 | `ta-batch run -i PATH [-o DIR]` | Run the analytics pipeline |
 | `ta-batch staging-parquet -i PATH -o OUT.parquet` | Convert CSV to Parquet without feature extraction |
 | `python scripts/build_final_research_report.py --run-id <uuid>` | Build a standalone final HTML report from an existing run |
+| `python scripts/build_duration_distribution_report.py --run-id <uuid>` | Build a standalone duration-distribution HTML report (monthly + last 30 days) |
 | `python scripts/build_llm_judge_sample.py` | Build a deterministic ChatGPT-ready LLM judge sample packet |
 | `python scripts/analyze_llm_judge_output.py` | Summarize ChatGPT judge JSON into CSV and Markdown outputs |
 | `python scripts/analyze_raw_transcriptions.py` | Run an ad-hoc raw CSV summary outside the batch pipeline |
@@ -86,6 +87,8 @@ Each run creates `outputs/<run_id>/` with:
 - `user_time_agg_month.*` unless disabled or the input omits `telegram_user_internal_id`
 - `figures/**/*.png`
 - `report.html` built-in HTML report, currently Russian-language
+- `duration_distribution_report.html` optional standalone duration-distribution report (if built explicitly)
+- `duration_distribution_monthly_stats.csv` optional month-level duration stats export (if built explicitly)
 - `manifest.json`
 - `metrics_dictionary.json`
 
@@ -127,6 +130,34 @@ What you get:
 - monthly content-category and language summaries rendered with Chart.js in the browser
 - daily PNG charts embedded into the HTML as base64 data URIs
 - the dedicated daily total-duration chart when `figures/day/layer_a_duration_total_sum_day.png` exists
+
+## Build A Duration Distribution Report From An Existing Run
+
+Use `scripts/build_duration_distribution_report.py` when you need a focused duration analysis with:
+
+- monthly duration distributions
+- last-30-days distribution
+- variance, standard deviation, and percentiles
+- interactive month-distribution charts (legend toggle, zoom, pan, reset zoom)
+
+Example:
+
+```powershell
+python scripts\build_duration_distribution_report.py --run-id <uuid>
+```
+
+Optional input override:
+
+```powershell
+python scripts\build_duration_distribution_report.py `
+  --run-id <uuid> `
+  --input-csv d:\path\to\transcriptions.csv
+```
+
+Outputs inside `outputs/<uuid>/`:
+
+- `duration_distribution_report.html`
+- `duration_distribution_monthly_stats.csv`
 
 ## Build An LLM Judge Packet
 

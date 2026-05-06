@@ -55,8 +55,11 @@ The repository has two HTML reporting surfaces:
 
 - `report.html`: built automatically by `ta-batch run` from run artifacts; compact, Russian-language, and centered on daily charts
 - `final_research_report.html`: built later by `scripts/build_final_research_report.py` from an existing `outputs/<run_id>/`; intended as a standalone research handoff
+- `duration_distribution_report.html`: built by `scripts/build_duration_distribution_report.py` from an existing `outputs/<run_id>/`; focused on duration distribution and last-30-days analysis
 
 The final research report reuses saved aggregates instead of recomputing features. It reads `manifest.json`, `metrics_dictionary.json`, monthly share CSVs, `time_agg_month.csv`, and PNG figures from the completed run folder.
+
+The duration distribution report reuses run metadata (`manifest.json`) but recomputes per-row duration from source text (`compute_layer_a_for_text`) over the run date window. It then writes a run-scoped HTML plus `duration_distribution_monthly_stats.csv` with percentiles, variance, and standard deviation.
 
 ## Time Buckets
 
